@@ -1,0 +1,183 @@
+Terraform: Terraform is an open-source infrastructure as code software tool that provides a consistent CLI workflow to manage hundreds of cloud services. Terraform codifies cloud APIs into declarative configuration files.
+
+Ansible : Ansible is an open-source software provisioning, configuration management, and application-deployment tool enabling infrastructure as code.
+
+So here we will use Terraform to create an ec2 instance in the form of code and we will use ansible to automate the deployment of java, jenkins and python on it
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+1. Steps to install Terraform
+
+# curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo apt-key add –
+# sudo apt-add-repository "deb [arch=$(dpkg --print-architecture)] https://apt.releases.hashicorp.com $(lsb_release -cs) main"
+# sudo apt install terraform
+
+we will also need awscli:
+
+# sudo pip install awscli
+# sudo apt-get update
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+2. Create terraform configuration file having .tf extension:
+
+aish@LAPTOP-Isha:~/project$ cat config.tf
+provider "aws" {
+access_key = "ASIAREEYI7VFRXTVNNSC"
+secret_key = "IpU2ujqVEyNLXh+rKfx1RA4Rvik8zVRcJfY4/8AY"
+token = "FwoGZXIvYXdzEEMaDBdOWJp6uXoeIOfSTyK+AbiRFEeYMIWkAS1oINwWzYsuRsqNranyNVLe0gYJxn0CXFXhuFS7UUI8tcrJXRRRzTqcPZ9z6QeLxiTCKM8TmlebCGqRbIGr0e/ztcaUVhZpWUr/ymYbixC92DDPBCCofF/dqPeitpTKr8+oQ93XTVLamjQGWNzHQUvjWb7GZLmhCmX1xxPKWr4X99Tf670M4w2lldyxCRAZXyNGYqGWk8/i7cd2yFXn/hFK0C5SlpzambEEZspKf8nqlMvfZUko28G0jwYyLcKgRriTizloutbSer8+m3ATUKmQZjSlPjHHgBzLQQsoOvOyVz6oBRoa2nhI6g=="
+region = "us-east-1"
+}
+
+resource "aws_instance" "instance1" {
+ami = "ami-0a14be708fcb20c8e"
+instance_type = "t2.micro"
+key_name= "id_rsa"
+vpc_security_group_ids = [aws_security_group.main.id]
+tags = {
+Name = "project"
+}
+}
+
+resource "aws_security_group" "main" {
+egress = [
+{
+cidr_blocks = ["0.0.0.0/0", ]
+description = ""
+from_port = 0
+ipv6_cidr_blocks = []
+prefix_list_ids = []
+protocol = "-1"
+security_groups = []
+self = false
+to_port = 0
+}
+]
+ingress = [
+{
+cidr_blocks = ["0.0.0.0/0", ]
+description = ""
+from_port = 22
+ipv6_cidr_blocks = []
+prefix_list_ids = []
+protocol = "tcp"
+security_groups = []
+self = false
+to_port = 22
+}
+]
+}
+
+resource "aws_key_pair" "deployer"{
+key_name = "id_rsa"
+public_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDLxbMuSy14i0Rs5Jtctx5aix0jDlenE+ZxHsZMMLsLoJk6D6Q2pREqmF2u7Y/nDe8eRkNXolXhz4Hze5hrLoskKEQIyfcJfle+d1Dgglf7QvYNmCgv7Mf9p/oMw/hOoijJNCXuXA5OyUNjTQn3nqOIOrvQQaJixvGCAMwH6hIwYoU+NqvfKFugllsszx2H5m98JKpyBed8ROir+9EyStmwJ7JdnkoR2az5eneihK1hPrFlkX4VAjRch4CAvcnkO8XZjeEsatosvVFSK75Ckqpqn6ilUMfnRFzp0C5AgmdWhfEXZ16OMlCYi46daHn/nKLrELGIdKUYmoemTvvP7uSV aish@LAPTOP-Isha"
+}
+aish@LAPTOP-Isha:~/project$
+
+
+Here the key we added is genrated by command - # ssh-keygen and added the public key
+We have enbaled the port 22 in security group , so that we are able to connect to instance via ssh
+
+Now in order to implement the terraform configuration file , run the below commands:
+
+# terraform init
+# terraform plan
+# terraform apply
+
+Now we can login to aws console and check the instance, key-pair and security group creation.
+
+In the ssh section , we will get the commands to connect to instance via ssh .Follow the commands.
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+3. Steps to install Ansible:
+
+# sudo apt-get install -f
+# sudo apt-get install software-properties-common
+# sudo apt-add-repository ppa:ansible/ansible
+# sudo apt-get update
+# sudo apt-get install ansible
+
+Also to be able to connect to our instance add the entry in /etc/ansible/hosts as below:
+
+[My_Group]
+ec2-3-82-172-41.compute-1.amazonaws.com ansible_ssh_user=ubuntu ansible_ssh_private_key_file=~/.ssh/id_rsa
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+4. Now we can create playbooks to install the required packages , add jenkins repository and run the playbooks.
+
+to run th playbook :
+
+# ansible-playbook <.yml_file_name>
+
+########################################################################################################################
+Playbook to install java:
+
+aish@LAPTOP-Isha:~/project$ cat java.yml
+---
+- hosts: My_Group
+  tasks:
+    - name: Update APT package manager repositories cache
+      become: true
+      apt:
+        update_cache: yes
+    - name: Install Java using Ansible
+      become: yes
+      apt:
+        name: "{{ packages }}"
+        state: present
+      vars:
+        packages:
+          - openjdk-11-jdk
+##########################################################################################################################
+Playbook to install jenkins:
+
+aish@LAPTOP-Isha:~/project$ cat Install_jenkins.yml
+---
+ - hosts: My_Group
+
+   tasks:
+      - name: ensure the jenkins apt repository key is installed
+        apt_key: url=https://pkg.jenkins.io/debian-stable/jenkins.io.key state=present
+        become: yes
+
+      - name: ensure the repository is configured
+        apt_repository: repo='deb https://pkg.jenkins.io/debian-stable binary/' state=present
+        become: yes
+
+      - name: ensure jenkins is installed
+        apt: name=jenkins update_cache=yes
+        become: yes
+
+      - name: ensure jenkins is running
+        service: name=jenkins state=started
+
+
+##################################################################################################################
+
+Playbook to install python:
+
+aish@LAPTOP-Isha:~/project$ cat Install_python.yml
+---
+- hosts: My_Group
+  tasks:
+    - name: Update APT package manager repositories cache
+      become: true
+      apt:
+        update_cache: yes
+    - name: Install Python using Ansible
+      become: yes
+      apt:
+        name: "{{ packages }}"
+        state: present
+      vars:
+        packages:
+          - python
+aish@LAPTOP-Isha:~/project$
+
+
+###########################################################################################################################
+
+We can also combine all the tasks together in one playbook
+Now login to ec2 client and check if all the pakcges are installed successfully.
+
